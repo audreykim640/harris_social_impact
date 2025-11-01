@@ -37,28 +37,78 @@ traj_rounded |>
 ```
 
 ```{r further rounding of locations and also naming}
-traj_rounded |>
-  group_by(individual_id, x = case_when(
-    lead(x_rounded) == x_rounded
-    & 
-    lead(y_rounded) == (y_rounded + 1) | (y_rounded - 1)
-    ~ x_rounded, 
-    TRUE ~ x_rounded)) |>
-   summarise(n_hours = sum(n_hours))
-   
-  # ) |>
-  summarize(n_hours = sum(n_hours # add the hours of two rows together...
-    [ # ...if...
-    lead(x_rounded) == x_rounded #...two rows have the same x...
-    # & # ...and...
-    # y_rounded == (y_rounded + 1) | (y_rounded - 1)
-      ])) # ...the y's that are one apart
+
+# reference: https://stackoverflow.com/questions/49208227/summarize-the-row-based-on-condition
+
+hours_per_coor <- traj_rounded |>
+  # collapsing x's
+  group_by(individual_id, 
+           x_rounded = case_when( # if...
+                 lead(x_rounded) == x_rounded #...two rows have the same x...
+                 & # ...and...
+                 lead(y_rounded) == (y_rounded + 1) | (y_rounded - 1) # ...the y's that are one apart
+                   ~ x_rounded, # group them into one row
+                 TRUE ~ x_rounded) # otherwise, keep the row as is
+               ) |>
+  summarise(n_hours = sum(n_hours),
+            y_rounded = round(mean(y_rounded), 1)) |>
+  # same thing but now for collapsing y's
+  group_by(individual_id, 
+           y_rounded = case_when( # 
+                 lead(y_rounded) == y_rounded 
+                 & 
+                 lead(x_rounded) == (x_rounded + 1) | (x_rounded - 1) 
+                   ~ y_rounded, 
+                 TRUE ~ y_rounded) 
+               ) |>
+  summarise(n_hours = sum(n_hours),
+            x_rounded = round(mean(x_rounded), 1))
        
+# this is not perfect -- I can see that a couple of person 14's locations should be joined
+
   # if two rows have the same y and x's that are one apart, join them
   # label location with most hours as home
   # label home location with Southeast, etc
   # label location with second most hours as work
   # 
-  # label
+
+```
+
+```{r}
+
+  # label location with most hours as home
+  # label home location with Southeast, etc
+  # label location with second most hours as work
+  # 
+
+hours_per_coor |>
+  group_by(individual_id) |>
+  mutate(max_hours = n_hours[which.max(n_hours)],
+         location = case_when(
+           n_hours == max_hours ~ "home",
+           n_hours >= 40 ~ "work - full-time")
+         )
+
+```
+
+
+```{r graveyard}
+# traj_rounded |>
+#   group_by(individual_id, 
+#            x = case_when( # if...
+#                 lead(x_rounded) == x_rounded #...two rows have the same x...
+#                 & # ...and...
+#                 lead(y_rounded) == (y_rounded + 1) | (y_rounded - 1) # ...the y's that are one apart
+#                 ~ x_rounded, # group them into one row
+#                 TRUE ~ x_rounded), # otherwise, keep the row as is
+#            y = case_when( # same but for if y's are the same
+#                 lead(y_rounded) == y_rounded
+#                 & 
+#                 lead(x_rounded) == (x_rounded + 1) | (x_rounded - 1)
+#                 ~ y_rounded, 
+#                 TRUE ~ y_rounded)
+#           ) |>
+#    summarise(n_hours = sum(n_hours))
+#    
 ```
 
