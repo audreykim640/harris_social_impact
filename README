@@ -1,0 +1,40 @@
+Explorations/brainstorming:
+
+I think it'd be interesting to track one person's movements throughout one weekday (since weekends are a little less predictable for many people who work).
+
+Since we have ground truth, we can also train a supervise machine learning algorithm. I will have to remember how to do this. [Later] Having now refreshed myself, I'm not sure how to train an algorithm given that it's based on patterns that are distinct for each person. Maybe I'll return to this, but for now, I will try manual labelling and see how accurately it turns out.
+
+Some districts are NA. What to do?
+
+Assumptions: 
+
+Understanding that the majority (although not all) people who work work during the day, we can tentatively and roughly assume that the person's most frequent location in the nighttime hours (12am-5am) are their home. There might be some folks who work nightshifts, which complicates things. 
+
+Perhaps to account for this, we can instead look at the length of time folks spend at work vs at home. Most full-time work shifts are 8-10 hours, and if people spend all of their other time at home, that's a nice split between 10 working vs 14 home hours per day on weekdays. However, some people work 12 hours shifts, so then we may have to defer to where they spend their days off -- hopefully at home (for data's and their rest's sake) but possibly running errands.
+
+Perhaps we can assume that the location at which one spends the most amount of time is their home. Combining non-working hours on working days as well as hours on non-working days (even if they're running errands) will likely result in this assumption being true for most people. We will also assume that folks are not on vacation to another part of the city during the weekend, as that could tip the balances to make the most frequented location for full-time folks their workplace.
+
+Now we need to define what a "place" is. Person 0's common locations are clusters of positions, but they're not staying in the exact same location/coordinates all the time. I could round, but rounding to the nearest integer might group distinct locations. 
+
+After looking at a small sample, it seems like even people who work close to home (like person 197) still moves enough for the coordinates to round to a different integer. 
+
+
+Assumptions:
+We are given the assumption that no one works from home. Yay!
+
+While we can figure out days of the week, not everyone works M-F, so I'm going to keep the weeks' hours cumulative and not try to assess weekends separately from weekdays.
+
+Any location where a person spends <3 hours per week is not their home or work.
+
+Assume part-time < 35 hours and full-time is 35+. By that definition, full-time could be 70 hours per week, which could make it difficult to differentiate
+
+Time of day could
+
+Person 0 spends 68 hours at (10,2) and 71 hours at (10,3). Other people have similar patterns. I would like to coalesce these locations into the same place, but I worry about people like 192, who appears to work very close to their home. I will try combining groups that are very similar if at least the x-coor or y-coor is common and then compare against the ground truth.
+
+
+
+
+References:
+https://www.geeksforgeeks.org/machine-learning/supervised-machine-learning/
+https://www.geeksforgeeks.org/machine-learning/svm-vs-knn-in-machine-learning/

@@ -4,8 +4,46 @@ format: html
 editor: visual
 ---
 
+```{r}
+library(tidyverse)
+```
+
 ## Explorations
 
 ```{r}
-
+trajectories <- read.csv("mobility_trajectories.csv") |>
+  mutate(timestamp = as.POSIXct(timestamp, format = "%Y-%d-%mT%H:%M:%S"))
 ```
+
+```{r individual 0 on Jan 6, 2025}
+## experimenting with the first person's first day of data -- just to check things out
+
+day_1_sample <- trajectories |>
+  filter(individual_id == 0,
+         timestamp <= "2025-06-02") 
+
+ggplot(day_1_sample, aes(x = x, y = y, color = timestamp)) + 
+  geom_point()
+
+## this person starts and ends the day at the same place -- presumably their home -- 
+## and spends the middle hours of the day in the same place, likely their workplace
+```
+
+```{r 10 people's adventures on day 1}
+set.seed(11012025)
+group_ids <- sample(200, 10)
+
+group <-trajectories |>
+  filter(individual_id %in% group_ids,
+         timestamp <= "2025-06-02")
+
+ggplot(group, aes(x = x, y = y, color = timestamp)) + 
+  geom_jitter() +
+  facet_wrap(~ individual_id)
+```
+
+
+
+
+
+

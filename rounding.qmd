@@ -1,0 +1,64 @@
+---
+title: "Rounding"
+format: html
+editor: visual
+---
+
+## Rounding
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+ground_truth <- read.csv("mobility_individuals.csv")
+colnames(ground_truth) <- paste(colnames(ground_truth), 'truth', sep = '_')
+
+trajectories <- read.csv("mobility_trajectories.csv") |>
+  mutate(timestamp = as.POSIXct(timestamp, format = "%Y-%d-%mT%H:%M:%S"))
+```
+
+
+```{r how many hours per person per rounded location}
+traj_rounded <- trajectories |>
+  mutate(x_rounded = round(x),
+         y_rounded = round(y)) |>
+  group_by(individual_id, x_rounded, y_rounded) |>
+  summarise(n_hours = n()) |>
+  filter(n_hours >= 3)
+```
+
+Person 0 spends 68 hours at (10,2) and 71 hours at (10,3). Other people have similar patterns. I would like to coalesce these locations into the same place, but I worry about people like 192, who appears to work very close to their home. I will try combining groups that are very similar if at least the x-coor or y-coor is common and then compare against the ground truth.
+
+```{r}
+head(ground_truth)
+traj_rounded |>
+  right_join(ground_truth, by = c("individual_id" = "individual_id_truth"))
+```
+
+```{r further rounding of locations and also naming}
+traj_rounded |>
+  group_by(individual_id, x = case_when(
+    lead(x_rounded) == x_rounded
+    & 
+    lead(y_rounded) == (y_rounded + 1) | (y_rounded - 1)
+    ~ x_rounded, 
+    TRUE ~ x_rounded)) |>
+   summarise(n_hours = sum(n_hours))
+   
+  # ) |>
+  summarize(n_hours = sum(n_hours # add the hours of two rows together...
+    [ # ...if...
+    lead(x_rounded) == x_rounded #...two rows have the same x...
+    # & # ...and...
+    # y_rounded == (y_rounded + 1) | (y_rounded - 1)
+      ])) # ...the y's that are one apart
+       
+  # if two rows have the same y and x's that are one apart, join them
+  # label location with most hours as home
+  # label home location with Southeast, etc
+  # label location with second most hours as work
+  # 
+  # label
+```
+
