@@ -4,7 +4,7 @@ format: html
 editor: visual
 ---
 
-## Rounding
+## Identifying discrete locations
 
 ```{r}
 library(tidyverse)
@@ -17,7 +17,6 @@ colnames(ground_truth) <- paste(colnames(ground_truth), 'truth', sep = '_')
 trajectories <- read.csv("mobility_trajectories.csv") |>
   mutate(timestamp = as.POSIXct(timestamp, format = "%Y-%d-%mT%H:%M:%S"))
 ```
-
 
 ```{r how many hours per person per rounded location}
 traj_rounded <- trajectories |>
@@ -74,23 +73,64 @@ hours_per_coor <- traj_rounded |>
 
 ```
 
+## Separating and labeling groups
+
 ```{r}
 
   # label location with most hours as home
   # label home location with Southeast, etc
   # label location with second most hours as work
-  # 
 
-hours_per_coor |>
+# identify folks' homes and their workplaces if they work full-time (30+ hours/wk)
+labeled <- hours_per_coor |>
   group_by(individual_id) |>
   mutate(max_hours = n_hours[which.max(n_hours)],
          location = case_when(
            n_hours == max_hours ~ "home",
-           n_hours >= 40 ~ "work - full-time")
+           n_hours >= 30 ~ "work - full-time")
          )
+
+# id folks who work full-time
+full_time <- labeled |>
+  filter(location == "work - full-time")
+
+# remove folks who work full-time as well as "home" rows so that we can look at part-time workers
+not_ft_or_home <- labeled |>
+  anti_join(full_time, by = "individual_id") |>
+  filter(is.na(location))
+
+# assume that folks who aren't working full-time and who spend at least 15 hours in the same non-home 
+# place is working part-time at that location
+part_time <- not_ft_or_home |>
+  group_by(individual_id) |>
+  mutate(max_hours = n_hours[which.max(n_hours)],
+         location = case_when(
+           n_hours == max_hours & n_hours > 15 ~ "work - part-time")
+         )
+
+# see if anyone is unaccounted for
+labeled |>
+  anti_join(full_time, by = "individual_id") |>
+  anti_join(part_time, by = "individual_id") 
+  
+# everyone remaining is assumed to be unemployed, as their only accounted-for location is home
+unemployed <- labeled |>
+  anti_join(full_time, by = "individual_id") |>
+  anti_join(part_time, by = "individual_id") 
 
 ```
 
+```{r sanity check}
+full_time_ids <- unique(full_time$individual_id)
+part_time_ids <- unique(part_time$individual_id)
+unemployed_ids <- unique(unemployed$individual_id)
+
+length(full_time_ids) + length(part_time_ids) + length(unemployed_ids)
+
+# everyone is accounted for! :)
+```
+
+## Putting everything together!
 
 ```{r graveyard}
 # traj_rounded |>
@@ -111,4 +151,3 @@ hours_per_coor |>
 #    summarise(n_hours = sum(n_hours))
 #    
 ```
-
