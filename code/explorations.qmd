@@ -43,6 +43,13 @@ ggplot(group, aes(x = x, y = y, color = timestamp)) +
 ```
 
 
+```{r}
+day_1_sample <- trajectories |>
+  filter(individual_id == 2) 
+
+ggplot(day_1_sample, aes(x = x, y = y, color = timestamp)) + 
+  geom_point()
+```
 
 
 

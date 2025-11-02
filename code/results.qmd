@@ -1,0 +1,63 @@
+---
+title: "Results"
+format: html
+editor: visual
+---
+
+```{r setup, include=FALSE} 
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
+
+## Results
+
+```{r load library}
+library(tidyverse)
+```
+
+```{r load data}
+ground_truth <- read.csv("mobility_individuals.csv")
+colnames(ground_truth) <- paste(colnames(ground_truth), 'truth', sep = '_')
+
+reformatted <- read.csv("predictions.csv") # generated from methodology.qmd
+```
+
+```{r check results}
+ground_truth |>
+  left_join(reformatted, by = c("individual_id_truth" = "individual_id")) |>
+  mutate(status_truth = sub("_", "-", status_truth),
+         # tally how many of my answers match ground truth's 
+         check_empl_stat = ifelse(status_truth == employment_status, 1, 0), 
+         check_home_dist = ifelse(home_dist_truth == home_quadrant, 1, 0),
+         check_empl_dist = ifelse(work_dist_truth == work_quadrant, 1, 0)
+  ) |>
+  # count correct responses
+  summarise(correct_employment_statuses = sum(check_empl_stat), 
+            correct_home_districts = sum(check_home_dist),
+            check_employment_districts = sum(check_empl_dist, na.rm = TRUE)
+            )
+
+```
+
+Out of 24 cases, this approach predicted the correct employment status for 21 people, the correct home district for 22 people, and the correct employment district for 18 people. 
+
+Taking a closer look at the incorrect predictions:
+
+```{r}
+ground_truth |>
+  left_join(reformatted, by = c("individual_id_truth" = "individual_id")) |>
+  mutate(status_truth = sub("_", "-", status_truth),
+         # tally how many of my answers match ground truth's 
+         check_empl_stat = ifelse(status_truth == employment_status, 1, 0), 
+         check_home_dist = ifelse(home_dist_truth == home_quadrant, 1, 0),
+         check_empl_dist = ifelse(work_dist_truth == work_quadrant, 1, 0)
+  ) |>
+  filter(
+    check_empl_stat == 0 |
+    check_home_dist == 0 |
+    check_empl_dist == 0 |
+    (is.na(check_empl_dist) & !is.na(work_dist_truth))
+  ) |>
+  select(-shift_truth)
+```
+
+Comparing my results vs the ground truth reveals that, as anticipated, my approach grouped distinct locations into one location for folks who live nearby their workplace. It also erred in accurately identifying locations near the border between districts. While these oversights may be negligible as the sample size increases, alternative approaches may be needed. 

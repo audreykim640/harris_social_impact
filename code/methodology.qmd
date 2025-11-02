@@ -4,13 +4,19 @@ format: html
 editor: visual
 ---
 
-## Identifying discrete locations
+```{r setup, include=FALSE} 
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
 
-```{r}
+# Identifying discrete locations using rounding
+
+## Set-up
+
+```{r load library}
 library(tidyverse)
 ```
 
-```{r}
+```{r load data}
 ground_truth <- read.csv("mobility_individuals.csv")
 colnames(ground_truth) <- paste(colnames(ground_truth), 'truth', sep = '_')
 
@@ -20,19 +26,11 @@ trajectories <- read.csv("mobility_trajectories.csv") |>
 
 ```{r how many hours per person per rounded location}
 traj_rounded <- trajectories |>
-  mutate(x_rounded = round(x),
+  mutate(x_rounded = round(x), # round coordinate to nearest integer
          y_rounded = round(y)) |>
   group_by(individual_id, x_rounded, y_rounded) |>
-  summarise(n_hours = n()) |>
-  filter(n_hours >= 3)
-```
-
-Person 0 spends 68 hours at (10,2) and 71 hours at (10,3). Other people have similar patterns. I would like to coalesce these locations into the same place, but I worry about people like 192, who appears to work very close to their home. I will try combining groups that are very similar if at least the x-coor or y-coor is common and then compare against the ground truth.
-
-```{r}
-head(ground_truth)
-traj_rounded |>
-  right_join(ground_truth, by = c("individual_id" = "individual_id_truth"))
+  summarise(n_hours = n()) |> # count hours per unique (x,y) coordinate
+  filter(n_hours >= 7) # remove some noise in the form of places where smaller amounts of time are spent
 ```
 
 ```{r further rounding of locations and also naming}
@@ -53,7 +51,7 @@ hours_per_coor <- traj_rounded |>
             y_rounded = round(mean(y_rounded), 1)) |>
   # same thing but now for collapsing y's
   group_by(individual_id, 
-           y_rounded = case_when( # 
+           y_rounded = case_when( 
                  lead(y_rounded) == y_rounded 
                  & 
                  lead(x_rounded) == (x_rounded + 1) | (x_rounded - 1) 
@@ -62,14 +60,6 @@ hours_per_coor <- traj_rounded |>
                ) |>
   summarise(n_hours = sum(n_hours),
             x_rounded = round(mean(x_rounded), 1))
-       
-# this is not perfect -- I can see that a couple of person 14's locations should be joined
-
-  # if two rows have the same y and x's that are one apart, join them
-  # label location with most hours as home
-  # label home location with Southeast, etc
-  # label location with second most hours as work
-  # 
 
 ```
 
@@ -138,7 +128,7 @@ length(full_time_ids) + length(part_time_ids) + length(unemployed_ids)
 
 ## Putting everything together!
 
-```{r}
+```{r enmployment status}
 
 # `labeled` includes home locations for all people and people's workplaces if full-time
 # need to add part-time work locations and indicate those who are unemployed
@@ -157,86 +147,77 @@ labeled_all_employment <- labeled |>
     individual_id %in% unemployed_ids ~ "unemployed" # check if  person's id is in list of unemployed ids
           )
         )
+```
 
-## adding labels about locations. I have shot myself in the foot with rounding locations,
-## as I don't know which quadrants "5"s should be in 
+```{r patching rounding oversight}
+
+## adding labels about locations
+
+## patching up oversight with rounding locations -- I don't know which quadrants "5"s should be in 
 ## I will address these cases separately instead of restarting and breaking everything
 
-## for people whose rounded coordinates are 5, I should look at their original data and count how many
+## for people whose rounded coordinates are 5, I will look at their original data and count how many
 ## hours were spent in [4.5, 5) and how many in (5, 5.5). 
 
-rounded_5 <- labeled_all_employment |>
-  filter(x_rounded == 5 | y_rounded == 5) |>
-  mutate(coor5 = case_when(
-      x_rounded == 5 ~ "x",
-      y_rounded == 5 ~ "y"
-            )
-        )
+x_rounded_5 <- labeled_all_employment |>
+  filter(x_rounded == 5) |> # only look at people whose coordinates rounded to 5
+  select(individual_id, y_rounded, location) |>
+  left_join(trajectories, by = "individual_id") |> # join with original points
+  filter(y_rounded == round(y) | y_rounded == round(y) + 0.5 | y_rounded == round(y) - 0.5) |> # make sure we're talking about the right location by matching y's
+  group_by(individual_id, y_rounded, location) |>
+  summarize(x_median = median(x)) # make a new estimate for the x-coordinate that had rounded to 5
 
-rounded_5$individual_id |>
-  unique() |>
-  left_join()
+# same thing but for y's
+y_rounded_5 <- labeled_all_employment |>
+  filter(y_rounded == 5) |>
+  select(individual_id, x_rounded, location) |>
+  left_join(trajectories, by = "individual_id") |>
+  filter(x_rounded == round(x) | x_rounded == round(x) + 0.5 | x_rounded == round(x) - 0.5) |> 
+  group_by(individual_id, x_rounded, location) |>
+  summarize(y_median = median(y))
+
+```
+
+```{r add district labels}
 
 labeled_employment_and_districts <- labeled_all_employment |> 
+  left_join(x_rounded_5, by = c("individual_id", "location", "y_rounded")) |>
+  left_join(y_rounded_5, by = c("individual_id", "location", "x_rounded")) |>
   mutate(
     district_ns = case_when(
       y_rounded < 5 ~ "South",
-      y_rounded > 5 ~ "North"
+      y_rounded > 5 ~ "North",
+      y_median < 5 ~ "South",
+      y_median > 5 ~ "North",
              ),
     district_ew = case_when(
       x_rounded < 5 ~ "west",
-      x_rounded > 5 ~ "east"
+      x_rounded > 5 ~ "east",
+      x_median < 5 ~ "west",
+      x_median > 5 ~ "east"
              ),
     district = paste0(district_ns, district_ew)
         )
 ```
 
 ```{r reformat df}
+# reformat to have the desired columns:
 # individual_id, home_quadrant, work_quadrant, employment_status
-
-# reference: https://stackoverflow.com/questions/45515218/combine-rows-in-data-frame-containing-na-to-make-complete-row
 
 reformatted <- labeled_employment_and_districts |>
   filter(!is.na(location)) |>
   pivot_wider(names_from = location, values_from = district) |>
-  select(-c(n_hours, x_rounded, y_rounded, district_ns, district_ew)) |>
-  group_by(individual_id) %>%
-  fill(everything(), .direction = "downup") %>%
+  select(individual_id, home, work, employment_status) |>
+  group_by(individual_id) |> # reference: https://stackoverflow.com/questions/45515218/combine-rows-in-data-frame-containing-na-to-make-complete-row
+  fill(everything(), .direction = "downup") |> # combine work and home rows into one row
   slice(1) |>
-  rename(home_district = home,
-         work_district = work
+  rename(home_quadrant = home,
+         work_quadrant = work
          )
 ```
 
-```{r check results}
-ground_truth |>
-  left_join(reformatted, by = c("individual_id_truth" = "individual_id")) |>
-  mutate(check_empl_stat = ifelse(employment_status_truth == employment_status, 1, 0),
-         check_home_dist = ifelse(home_dist_truth == home_district, 1, 0),
-         check_empl_dist = ifelse(work_dist_truth == work_district, 1, 0)
-  )
+## Export .csv
 
-```
-
-
-## Graveyard
-
-```{r graveyard}
-# traj_rounded |>
-#   group_by(individual_id, 
-#            x = case_when( # if...
-#                 lead(x_rounded) == x_rounded #...two rows have the same x...
-#                 & # ...and...
-#                 lead(y_rounded) == (y_rounded + 1) | (y_rounded - 1) # ...the y's that are one apart
-#                 ~ x_rounded, # group them into one row
-#                 TRUE ~ x_rounded), # otherwise, keep the row as is
-#            y = case_when( # same but for if y's are the same
-#                 lead(y_rounded) == y_rounded
-#                 & 
-#                 lead(x_rounded) == (x_rounded + 1) | (x_rounded - 1)
-#                 ~ y_rounded, 
-#                 TRUE ~ y_rounded)
-#           ) |>
-#    summarise(n_hours = sum(n_hours))
-#    
+```{r}
+write.csv(reformatted, "predictions.csv")
 ```
