@@ -105,8 +105,10 @@ part_time <- not_ft_or_home |>
   group_by(individual_id) |>
   mutate(max_hours = n_hours[which.max(n_hours)],
          location = case_when(
-           n_hours == max_hours & n_hours > 15 ~ "work - part-time")
-         )
+           n_hours == max_hours & n_hours > 15 ~ "work - part-time"
+           )
+         ) |>
+  filter(location == "work - part-time")
 
 # see if anyone is unaccounted for
 # full group minus people designated as full-time minus people designated as part-time
@@ -141,7 +143,7 @@ length(full_time_ids) + length(part_time_ids) + length(unemployed_ids)
 # `labeled` includes home locations for all people and people's workplaces if full-time
 # need to add part-time work locations and indicate those who are unemployed
 
-test <- labeled |>
+labeled_all_employment <- labeled |>
   # adding part-time work labels
   left_join(part_time, by = c("individual_id", "n_hours", "x_rounded", "y_rounded")) |>
   mutate(location.x = coalesce(location.x, location.y)) |> # combine part-time entries into `location`
@@ -156,8 +158,66 @@ test <- labeled |>
           )
         )
 
+## adding labels about locations. I have shot myself in the foot with rounding locations,
+## as I don't know which quadrants "5"s should be in 
+## I will address these cases separately instead of restarting and breaking everything
+
+## for people whose rounded coordinates are 5, I should look at their original data and count how many
+## hours were spent in [4.5, 5) and how many in (5, 5.5). 
+
+rounded_5 <- labeled_all_employment |>
+  filter(x_rounded == 5 | y_rounded == 5) |>
+  mutate(coor5 = case_when(
+      x_rounded == 5 ~ "x",
+      y_rounded == 5 ~ "y"
+            )
+        )
+
+rounded_5$individual_id |>
+  unique() |>
+  left_join()
+
+labeled_employment_and_districts <- labeled_all_employment |> 
+  mutate(
+    district_ns = case_when(
+      y_rounded < 5 ~ "South",
+      y_rounded > 5 ~ "North"
+             ),
+    district_ew = case_when(
+      x_rounded < 5 ~ "west",
+      x_rounded > 5 ~ "east"
+             ),
+    district = paste0(district_ns, district_ew)
+        )
+```
+
+```{r reformat df}
+# individual_id, home_quadrant, work_quadrant, employment_status
+
+# reference: https://stackoverflow.com/questions/45515218/combine-rows-in-data-frame-containing-na-to-make-complete-row
+
+reformatted <- labeled_employment_and_districts |>
+  filter(!is.na(location)) |>
+  pivot_wider(names_from = location, values_from = district) |>
+  select(-c(n_hours, x_rounded, y_rounded, district_ns, district_ew)) |>
+  group_by(individual_id) %>%
+  fill(everything(), .direction = "downup") %>%
+  slice(1) |>
+  rename(home_district = home,
+         work_district = work
+         )
+```
+
+```{r check results}
+ground_truth |>
+  left_join(reformatted, by = c("individual_id_truth" = "individual_id")) |>
+  mutate(check_empl_stat = ifelse(employment_status_truth == employment_status, 1, 0),
+         check_home_dist = ifelse(home_dist_truth == home_district, 1, 0),
+         check_empl_dist = ifelse(work_dist_truth == work_district, 1, 0)
+  )
 
 ```
+
 
 ## Graveyard
 
