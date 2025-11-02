@@ -109,11 +109,14 @@ part_time <- not_ft_or_home |>
          )
 
 # see if anyone is unaccounted for
+# full group minus people designated as full-time minus people designated as part-time
+# we hope for no more unlabeled locations -> success! only entries with "home" are left
 labeled |>
   anti_join(full_time, by = "individual_id") |>
   anti_join(part_time, by = "individual_id") 
   
-# everyone remaining is assumed to be unemployed, as their only accounted-for location is home
+# everyone remaining is assumed to be unemployed, as their only accounted-for location is home, 
+# and they have no unaccounted for locations
 unemployed <- labeled |>
   anti_join(full_time, by = "individual_id") |>
   anti_join(part_time, by = "individual_id") 
@@ -121,16 +124,42 @@ unemployed <- labeled |>
 ```
 
 ```{r sanity check}
+# check number of people in each group (full-time, part-time, unemployed)
 full_time_ids <- unique(full_time$individual_id)
 part_time_ids <- unique(part_time$individual_id)
 unemployed_ids <- unique(unemployed$individual_id)
 
 length(full_time_ids) + length(part_time_ids) + length(unemployed_ids)
 
-# everyone is accounted for! :)
+# should equal 200 -> success! everyone is accounted for :)
 ```
 
 ## Putting everything together!
+
+```{r}
+
+# `labeled` includes home locations for all people and people's workplaces if full-time
+# need to add part-time work locations and indicate those who are unemployed
+
+test <- labeled |>
+  # adding part-time work labels
+  left_join(part_time, by = c("individual_id", "n_hours", "x_rounded", "y_rounded")) |>
+  mutate(location.x = coalesce(location.x, location.y)) |> # combine part-time entries into `location`
+  rename(location = location.x) |> # rename column from join
+  select(-c(location.y, max_hours.x, max_hours.y)) |> # disregard unneeded columns
+  # splitting work label and location label before adding "unemployed labels"
+  separate(col = location, sep = " - ", into = c("location", "employment_status")) |>
+  # adding unemployed labels
+  mutate(employment_status = case_when(
+    !is.na(employment_status) ~ employment_status, # keep existing entries
+    individual_id %in% unemployed_ids ~ "unemployed" # check if  person's id is in list of unemployed ids
+          )
+        )
+
+
+```
+
+## Graveyard
 
 ```{r graveyard}
 # traj_rounded |>
