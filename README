@@ -1,8 +1,9 @@
 Audrey Kim
 Nov 2, 2025
-Harris Social Impact - Technical Assessment
 
 Option A: Mobility Pattern Challenge
+
+Problem statement: Given data on people's movements throughout one week, identify their home district (location), employment status, and employment district (location). A sample of ground truth data is also provided.
 
 Key for required deliverables: 
 - code: methodology.qmd (I have included explorations.qmd and results.qmd, but these are supplementary)
